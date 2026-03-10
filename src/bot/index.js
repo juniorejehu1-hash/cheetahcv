@@ -1,5 +1,13 @@
-require('dotenv').config();
-const { Bot, InlineKeyboard, InputFile } = require('grammy');
+const http = require('http');
+
+// Simple HTTP server for Railway
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('CheetahCV Bot is alive!');
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => console.log(`Health server on port ${PORT}`));const { Bot, InlineKeyboard, InputFile } = require('grammy');
 const { supabase } = require('../services/supabase');
 const { extractText, structureCV } = require('../services/cv-parser');
 const { tailorCV } = require('../services/cv-tailor');
