@@ -1,4 +1,9 @@
+require('dotenv').config();
 const http = require('http');
+const { Bot, InlineKeyboard, InputFile } = require('grammy');
+const { supabase } = require('../services/supabase');
+const { extractText, structureCV } = require('../services/cv-parser');
+const { tailorCV } = require('../services/cv-tailor');
 
 // Simple HTTP server for Railway
 const server = http.createServer((req, res) => {
@@ -7,10 +12,7 @@ const server = http.createServer((req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Health server on port ${PORT}`));const { Bot, InlineKeyboard, InputFile } = require('grammy');
-const { supabase } = require('../services/supabase');
-const { extractText, structureCV } = require('../services/cv-parser');
-const { tailorCV } = require('../services/cv-tailor');
+server.listen(PORT, () => console.log(`Health server on port ${PORT}`));
 
 const bot = new Bot(process.env.BOT_TOKEN);
 const userStates = new Map();
@@ -38,7 +40,6 @@ function isJobTooOld(postedDate) {
   return hoursDiff > MAX_ALERT_AGE_HOURS;
 }
 
-// /start command
 bot.command('start', async (ctx) => {
   var telegramId = ctx.from.id;
   var { data: existing } = await supabase
@@ -65,7 +66,6 @@ bot.command('start', async (ctx) => {
   );
 });
 
-// /search command
 bot.command('search', async (ctx) => {
   userStates.set(ctx.from.id, { step: 'keywords' });
   
@@ -76,7 +76,6 @@ bot.command('search', async (ctx) => {
   );
 });
 
-// /mysearches - View all active search profiles
 bot.command('mysearches', async (ctx) => {
   const { data: user } = await supabase
     .from('users')
@@ -114,7 +113,6 @@ bot.command('mysearches', async (ctx) => {
   }
 });
 
-// /clearalerts - Clear all new alerts
 bot.command('clearalerts', async (ctx) => {
   const { data: user } = await supabase
     .from('users')
@@ -134,7 +132,6 @@ bot.command('clearalerts', async (ctx) => {
   await ctx.reply(`✅ Cleared ${count} alert${count !== 1 ? 's' : ''}.\n\nYou won't see them in /alerts anymore.`);
 });
 
-// /alerts command with pagination
 bot.command('alerts', async (ctx) => {
   await showAlerts(ctx, 0);
 });
@@ -146,7 +143,6 @@ async function showAlerts(ctx, page = 0) {
     .eq('telegram_id', ctx.from.id)
     .single();
 
-  // Auto-dismiss old alerts (older than 48 hours)
   await supabase
     .from('alerts')
     .update({ status: 'expired' })
@@ -168,14 +164,12 @@ async function showAlerts(ctx, page = 0) {
       }
     });
 
-  // Get fresh alerts (less than 48 hours old)
   var { data: allAlerts } = await supabase
     .from('alerts')
     .select('*, jobs(*)')
     .eq('user_id', user.id)
     .eq('status', 'new');
 
-  // Filter out jobs older than 48 hours
   const recentAlerts = allAlerts?.filter(alert => {
     const job = alert.jobs;
     const postedDate = job.posted_at || job.created_at;
@@ -220,7 +214,6 @@ async function showAlerts(ctx, page = 0) {
     );
   }
   
-  // Pagination buttons
   if (totalPages > 1) {
     const navKeyboard = new InlineKeyboard();
     
@@ -238,7 +231,6 @@ async function showAlerts(ctx, page = 0) {
   await ctx.reply('💡 Tip: Jobs older than 48 hours are automatically removed. Use /clearalerts to dismiss all.');
 }
 
-// /help command
 bot.command('help', async (ctx) => {
   await ctx.reply(
     '🤖 CHEETAHCV COMMANDS:\n\n'
@@ -254,7 +246,6 @@ bot.command('help', async (ctx) => {
   );
 });
 
-// Handle document uploads (CV)
 bot.on('message:document', async (ctx) => {
   await ctx.reply('Got your CV! Analysing...');
 
@@ -331,7 +322,6 @@ bot.on('message:document', async (ctx) => {
   }
 });
 
-// Handle text messages for search setup and editing
 bot.on('message:text', async (ctx) => {
   const state = userStates.get(ctx.from.id);
   if (!state) return;
@@ -381,7 +371,6 @@ bot.on('message:text', async (ctx) => {
       { reply_markup: keyboard }
     );
   } else if (state.step === 'edit_keywords') {
-    // Editing keywords
     const searchId = state.searchId;
     const newKeywords = ctx.message.text.split(',').map(k => k.trim());
     
@@ -393,7 +382,6 @@ bot.on('message:text', async (ctx) => {
     await ctx.reply(`✅ Updated keywords to: ${newKeywords.join(', ')}`);
     userStates.delete(ctx.from.id);
   } else if (state.step === 'edit_location') {
-    // Editing location
     const searchId = state.searchId;
     const newLocation = ctx.message.text === 'anywhere' ? null : ctx.message.text;
     
@@ -405,7 +393,6 @@ bot.on('message:text', async (ctx) => {
     await ctx.reply(`✅ Updated location to: ${newLocation || 'Anywhere'}`);
     userStates.delete(ctx.from.id);
   } else if (state.step === 'edit_companies') {
-    // Editing companies
     const searchId = state.searchId;
     const text = ctx.message.text.toLowerCase();
     const newCompanies = (text === 'any' || text === 'all') ? null : ctx.message.text.split(',').map(c => c.trim());
@@ -420,7 +407,6 @@ bot.on('message:text', async (ctx) => {
   }
 });
 
-// Handle callback queries
 bot.on('callback_query:data', async (ctx) => {
   const data = ctx.callbackQuery.data;
   
@@ -614,7 +600,6 @@ bot.on('callback_query:data', async (ctx) => {
   }
 });
 
-// Error handler
 bot.catch((err) => {
   const ctx = err.ctx;
   console.error(`Error while handling update ${ctx.update.update_id}:`);
